@@ -1,2 +1,1 @@
-<img src="https://raw.githubusercontent.com/lelettrone/Computer-System-Design-2023/main/ASIM%20Assembly/screen_asim.png" width="600" class="center"/>
-
+<p><img src="https://raw.githubusercontent.com/lelettrone/Computer-System-Design-2023/main/ASIM%20Assembly/screen_asim.png" width="100%" height="100%"/></p>
