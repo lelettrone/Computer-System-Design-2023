@@ -1,0 +1,221 @@
+
+
+*INSERIRE C,B,A
+**********AREA DATI**************************************
+	ORG	$8000
+MSG	DS.B	60
+COUNT_N	DC.B	0
+COUNT_M	DC.B	0
+N	DC.B	0
+T	DC.B	5
+FASE	DC.B	1
+WAIT_B	DC.B	0
+WAIT_C	DC.B	0
+MUTEX	DC.B	0
+LASTSE	DC.B	0
+
+***********AREA MAIN*********************************	
+	ORG    $8200
+
+PIADA1	EQU    $2004			;indirizzo di PIA-A dato, usato in input
+PIACA1	EQU    $2005			;indirizzo di PIA-A stato/controllo
+
+PIADA2	EQU    $2008			;indirizzo di PIA-A dato, usato in input
+PIACA2	EQU    $2009			;indirizzo di PIA-A stato/controllo
+
+MAIN	JSR	DVAIN			;inizializza PIA porto A
+				
+	MOVE.W	SR,D0		;legge il registro di stato
+	ANDI.W	#$D8FF,D0 	;maschera per reg stato (stato utente, int abilitati)
+	MOVE.W	D0,SR		;pone liv int a 000
+
+LOOP  	JMP 		LOOP		;ciclo caldo dove il processore attende interrupt		
+
+*********************************************************************************************************
+
+
+*********************************************************************************************************
+*INIZIALIZZAZIONE DELLA PIA: PORTO A	        	
+*   CRA |0 |0 |1 0 0 |1 |0 1|
+*
+*	DRA=0 => PORTO A PORTO DI INGRESSO
+*
+***********************************************************************************************************
+DVAIN	MOVE.B	#0,PIACA1		;mette 0 nel registro controllo così al prossimo accesso a PIADA (indirizzo pari)
+*						;selezionerà il registro direzione del porto A
+	MOVE.B	#0,PIADA1		;accede a DRA e pone DRA=0 : le linee di A sono linee di input	
+	MOVE.B	#%00100101,PIACA1  	;imposta il registro di controllo come indicato sopra, ponendo IRQA1=1 e IRQA2=1
+*						;i bit CRA7 e CRA6 sono a sola lettura
+
+	MOVE.B	#0,PIACA2		
+	MOVE.B	#0,PIADA2	
+	MOVE.B	#%00100101,PIACA2
+	
+    RTS
+
+*******************************************************************************************************
+*La pia-A ha ricevuto un carattere dalla pia-B partner, interrompe il processore che
+*con la ISR riceve il carattere e lo salva in memoria
+*ISR a $8700 associata all' interrupt di liv. 3  #vect 27  mappato a $6C della ROM
+********************************************************************************************************	
+	
+
+	ORG $8700		
+
+ISR_C	MOVEM D0-D7/A0-A6,-(SP)
+		TAS MUTEX
+		BNE SUS_C
+		JSR FUNC_C
+		MOVE.B WAIT_B,D0
+		CMP.B	#1,D0
+		BNE	R_M_C
+		JSR FUNC_B
+		MOVE.B #0,WAIT_B
+R_M_C		MOVE.B #0,MUTEX 
+		JMP EXIT_ISRC
+SUS_C		MOVE.B #1,WAIT_C
+EXIT_ISRC	MOVEM (SP)+,D0-D7/A0-A6
+		RTE
+
+
+
+
+	ORG $8900		
+
+ISR_B	MOVEM D0-D7/A0-A6,-(SP)
+		TAS MUTEX
+		BNE SUS_B
+		JSR FUNC_B
+		MOVE.B WAIT_C,D0
+		MOVE.B FASE,D1
+		CMP.B	#1,D0
+		BNE	R_M_B
+		CMP.B #2,D1
+		BNE R_M_B
+		JSR FUNC_C
+		MOVE.B #0,WAIT_C
+R_M_B	MOVE.B #0,MUTEX
+		JMP E_ISRB
+SUS_B		MOVE.B #1,WAIT_B
+E_ISRB	MOVEM (SP)+,D0-D7/A0-A6
+		RTE
+
+FUNC_B	MOVEM D0-D7/A0-A6,-(SP)
+		MOVEA.L #MSG,A0	
+		MOVEA.L #PIADA2,A1
+		MOVEA.L #PIACA2,A2
+
+		MOVE.B FASE,D0	*if
+
+		CMP.B	#1,D0
+		BNE ELSE_FASEB
+		MOVE.B N,D1
+		CMP.B	#0,D1
+		BNE	CONTB
+		MOVE.B (A1),N
+		JMP EXIT_FUNCB
+
+CONTB		MOVE.B COUNT_N,D0
+		MOVE.B COUNT_M,D1
+		MOVE.B (A1),(A0,D0)
+		ADD.B	#1,D0
+		MOVE.B D0,COUNT_N
+		MOVE.B N,D2
+		CMP.B D0,D2
+		BNE EXIT_FUNCB
+		MOVE.B #2,FASE
+		MOVE.B #0,COUNT_N
+		JMP EXIT_FUNCB
+
+ELSE_FASEB    CMP.B #2,D0
+		BNE EXIT_FUNCB
+		
+		MOVE.B LASTSE,D0
+		CMP.B #1,D0
+		BNE K_B
+		MOVE.B #1,WAIT_B
+		JMP EXIT_FUNCB
+				
+
+K_B		MOVE.B #1,LASTSE
+		MOVE.B COUNT_N,D0
+		MOVE.B COUNT_M,D1
+		MOVE.B (A1),(A0,D0)
+		ADD.B	#1,D0
+		MOVE.B D0,COUNT_N
+		MOVE.B N,D2
+		CMP.B D0,D2
+		BNE EXIT_FUNCB
+		MOVE.B COUNT_M,D3
+		ADD.B #1,D3
+		MOVE.B D3,COUNT_M
+		MOVE.B #0,COUNT_N
+		MOVE.B COUNT_M,D3
+		MOVE.B T,D4
+		CMP.B D3,D4
+		BNE EXIT_FUNCB
+		MOVE.B #3,FASE
+		MOVE.B #$00,(A2)
+		
+
+
+
+EXIT_FUNCB	MOVEM (SP)+,D0-D7/A0-A6
+		RTS
+	
+FUNC_C	MOVEM D0-D7/A0-A6,-(SP)
+		MOVEA.L #MSG,A0	
+		MOVEA.L #PIADA1,A1
+		MOVEA.L #PIACA1,A2
+
+		MOVE.B FASE,D0	*if
+
+		CMP.B	#1,D0
+		BNE ELC
+		MOVE.B #1,WAIT_C
+		JMP EFC
+
+ELC     CMP.B #2,D0
+		BNE EFC
+
+		MOVE.B LASTSE,D0
+		CMP.B #2,D0
+		BNE K_C
+		MOVE.B #1,WAIT_C
+		JMP EFC
+				
+
+K_C		MOVE.B #2,LASTSE
+
+		MOVE.B COUNT_N,D0
+		MOVE.B COUNT_M,D1
+		MOVE.B (A1),(A0,D0)
+		ADD.B	#1,D0
+		MOVE.B D0,COUNT_N
+		MOVE.B N,D2
+		CMP.B D0,D2
+		BNE EFC
+		MOVE.B COUNT_M,D3
+		ADD.B #1,D3
+		MOVE.B D3,COUNT_M
+		MOVE.B #0,COUNT_N
+		MOVE.B COUNT_M,D3
+		MOVE.B T,D4
+		CMP.B D3,D4
+		BNE EFC
+		MOVE.B #3,FASE
+		MOVE.B #$00,(A2)
+		
+
+
+
+EFC	MOVEM (SP)+,D0-D7/A0-A6
+		RTS
+	
+		END MAIN
+
+
+
+
+
+

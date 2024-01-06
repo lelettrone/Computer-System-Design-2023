@@ -1,0 +1,218 @@
+00000000                                     1  
+00000000                                     2  
+00000000                                     3  *INSERIRE C,B,A
+00000000                                     4  **********AREA DATI**************************************
+00008000                                     5  	ORG	$8000
+00008000                                     6  MSG	DS.B	60
+0000803C  00                                 7  COUNT_N	DC.B	0
+0000803D  00                                 8  COUNT_M	DC.B	0
+0000803E  00                                 9  N	DC.B	0
+0000803F  05                                10  T	DC.B	5
+00008040  01                                11  FASE	DC.B	1
+00008041  00                                12  WAIT_B	DC.B	0
+00008042  00                                13  WAIT_C	DC.B	0
+00008043  00                                14  MUTEX	DC.B	0
+00008044  00                                15  LASTSE	DC.B	0
+00008045                                    16  
+00008045                                    17  ***********AREA MAIN*********************************	
+00008200                                    18  	ORG    $8200
+00008200                                    19  
+00008200  =00002004                         20  PIADA1	EQU    $2004			;indirizzo di PIA-A dato, usato in input
+00008200  =00002005                         21  PIACA1	EQU    $2005			;indirizzo di PIA-A stato/controllo
+00008200                                    22  
+00008200  =00002008                         23  PIADA2	EQU    $2008			;indirizzo di PIA-A dato, usato in input
+00008200  =00002009                         24  PIACA2	EQU    $2009			;indirizzo di PIA-A stato/controllo
+00008200                                    25  
+00008200  4EB9 00008214                     26  MAIN	JSR	DVAIN			;inizializza PIA porto A
+00008206                                    27  				
+00008206  40C0                              28  	MOVE.W	SR,D0		;legge il registro di stato
+00008208  0240 D8FF                         29  	ANDI.W	#$D8FF,D0 	;maschera per reg stato (stato utente, int abilitati)
+0000820C  46C0                              30  	MOVE.W	D0,SR		;pone liv int a 000
+0000820E                                    31  
+0000820E  4EF9 0000820E                     32  LOOP  	JMP 		LOOP		;ciclo caldo dove il processore attende interrupt		
+00008214                                    33  
+00008214                                    34  *********************************************************************************************************
+00008214                                    35  
+00008214                                    36  
+00008214                                    37  *********************************************************************************************************
+00008214                                    38  *INIZIALIZZAZIONE DELLA PIA: PORTO A	        	
+00008214                                    39  *   CRA |0 |0 |1 0 0 |1 |0 1|
+00008214                                    40  *
+00008214                                    41  *	DRA=0 => PORTO A PORTO DI INGRESSO
+00008214                                    42  *
+00008214                                    43  ***********************************************************************************************************
+00008214  11FC 0000 2005                    44  DVAIN	MOVE.B	#0,PIACA1		;mette 0 nel registro controllo così al prossimo accesso a PIADA (indirizzo pari)
+0000821A                                    45  *						;selezionerà il registro direzione del porto A
+0000821A  11FC 0000 2004                    46  	MOVE.B	#0,PIADA1		;accede a DRA e pone DRA=0 : le linee di A sono linee di input	
+00008220  11FC 0025 2005                    47  	MOVE.B	#%00100101,PIACA1  	;imposta il registro di controllo come indicato sopra, ponendo IRQA1=1 e IRQA2=1
+00008226                                    48  *						;i bit CRA7 e CRA6 sono a sola lettura
+00008226                                    49  
+00008226  11FC 0000 2009                    50  	MOVE.B	#0,PIACA2		
+0000822C  11FC 0000 2008                    51  	MOVE.B	#0,PIADA2	
+00008232  11FC 0025 2009                    52  	MOVE.B	#%00100101,PIACA2
+00008238                                    53  	
+00008238  4E75                              54      RTS
+0000823A                                    55  
+0000823A                                    56  *******************************************************************************************************
+0000823A                                    57  *La pia-A ha ricevuto un carattere dalla pia-B partner, interrompe il processore che
+0000823A                                    58  *con la ISR riceve il carattere e lo salva in memoria
+0000823A                                    59  *ISR a $8700 associata all' interrupt di liv. 3  #vect 27  mappato a $6C della ROM
+0000823A                                    60  ********************************************************************************************************	
+0000823A                                    61  	
+0000823A                                    62  
+00008700                                    63  	ORG $8700		
+00008700                                    64  
+00008700  48A7 FFFE                         65  ISR_C	MOVEM D0-D7/A0-A6,-(SP)
+00008704  4AF9 00008043                     66  		TAS MUTEX
+0000870A  6600 0032                         67  		BNE SUS_C
+0000870E  4EB9 00008A5C                     68  		JSR FUNC_C
+00008714  1039 00008041                     69  		MOVE.B WAIT_B,D0
+0000871A  B03C 0001                         70  		CMP.B	#1,D0
+0000871E  6600 0010                         71  		BNE	R_M_C
+00008722  4EB9 0000895A                     72  		JSR FUNC_B
+00008728  13FC 0000 00008041                73  		MOVE.B #0,WAIT_B
+00008730  13FC 0000 00008043                74  R_M_C		MOVE.B #0,MUTEX 
+00008738  4EF9 00008746                     75  		JMP EXIT_ISRC
+0000873E  13FC 0001 00008042                76  SUS_C		MOVE.B #1,WAIT_C
+00008746  4C9F 7FFF                         77  EXIT_ISRC	MOVEM (SP)+,D0-D7/A0-A6
+0000874A  4E73                              78  		RTE
+0000874C                                    79  
+0000874C                                    80  
+0000874C                                    81  
+0000874C                                    82  
+00008900                                    83  	ORG $8900		
+00008900                                    84  
+00008900  48A7 FFFE                         85  ISR_B	MOVEM D0-D7/A0-A6,-(SP)
+00008904  4AF9 00008043                     86  		TAS MUTEX
+0000890A  6600 0040                         87  		BNE SUS_B
+0000890E  4EB9 0000895A                     88  		JSR FUNC_B
+00008914  1039 00008042                     89  		MOVE.B WAIT_C,D0
+0000891A  1239 00008040                     90  		MOVE.B FASE,D1
+00008920  B03C 0001                         91  		CMP.B	#1,D0
+00008924  6600 0018                         92  		BNE	R_M_B
+00008928  B23C 0002                         93  		CMP.B #2,D1
+0000892C  6600 0010                         94  		BNE R_M_B
+00008930  4EB9 00008A5C                     95  		JSR FUNC_C
+00008936  13FC 0000 00008042                96  		MOVE.B #0,WAIT_C
+0000893E  13FC 0000 00008043                97  R_M_B	MOVE.B #0,MUTEX
+00008946  4EF9 00008954                     98  		JMP E_ISRB
+0000894C  13FC 0001 00008041                99  SUS_B		MOVE.B #1,WAIT_B
+00008954  4C9F 7FFF                        100  E_ISRB	MOVEM (SP)+,D0-D7/A0-A6
+00008958  4E73                             101  		RTE
+0000895A                                   102  
+0000895A  48A7 FFFE                        103  FUNC_B	MOVEM D0-D7/A0-A6,-(SP)
+0000895E  207C 00008000                    104  		MOVEA.L #MSG,A0	
+00008964  227C 00002008                    105  		MOVEA.L #PIADA2,A1
+0000896A  247C 00002009                    106  		MOVEA.L #PIACA2,A2
+00008970                                   107  
+00008970  1039 00008040                    108  		MOVE.B FASE,D0	*if
+00008976                                   109  
+00008976  B03C 0001                        110  		CMP.B	#1,D0
+0000897A  6600 0056                        111  		BNE ELSE_FASEB
+0000897E  1239 0000803E                    112  		MOVE.B N,D1
+00008984  B23C 0000                        113  		CMP.B	#0,D1
+00008988  6600 000E                        114  		BNE	CONTB
+0000898C  13D1 0000803E                    115  		MOVE.B (A1),N
+00008992  4EF9 00008A56                    116  		JMP EXIT_FUNCB
+00008998                                   117  
+00008998  1039 0000803C                    118  CONTB		MOVE.B COUNT_N,D0
+0000899E  1239 0000803D                    119  		MOVE.B COUNT_M,D1
+000089A4  1191 0000                        120  		MOVE.B (A1),(A0,D0)
+000089A8  5200                             121  		ADD.B	#1,D0
+000089AA  13C0 0000803C                    122  		MOVE.B D0,COUNT_N
+000089B0  1439 0000803E                    123  		MOVE.B N,D2
+000089B6  B400                             124  		CMP.B D0,D2
+000089B8  6600 009C                        125  		BNE EXIT_FUNCB
+000089BC  13FC 0002 00008040               126  		MOVE.B #2,FASE
+000089C4  13FC 0000 0000803C               127  		MOVE.B #0,COUNT_N
+000089CC  4EF9 00008A56                    128  		JMP EXIT_FUNCB
+000089D2                                   129  
+000089D2  B03C 0002                        130  ELSE_FASEB    CMP.B #2,D0
+000089D6  6600 007E                        131  		BNE EXIT_FUNCB
+000089DA                                   132  		
+000089DA  1039 00008044                    133  		MOVE.B LASTSE,D0
+000089E0  B03C 0001                        134  		CMP.B #1,D0
+000089E4  6600 0010                        135  		BNE K_B
+000089E8  13FC 0001 00008041               136  		MOVE.B #1,WAIT_B
+000089F0  4EF9 00008A56                    137  		JMP EXIT_FUNCB
+000089F6                                   138  				
+000089F6                                   139  
+000089F6  13FC 0001 00008044               140  K_B		MOVE.B #1,LASTSE
+000089FE  1039 0000803C                    141  		MOVE.B COUNT_N,D0
+00008A04  1239 0000803D                    142  		MOVE.B COUNT_M,D1
+00008A0A  1191 0000                        143  		MOVE.B (A1),(A0,D0)
+00008A0E  5200                             144  		ADD.B	#1,D0
+00008A10  13C0 0000803C                    145  		MOVE.B D0,COUNT_N
+00008A16  1439 0000803E                    146  		MOVE.B N,D2
+00008A1C  B400                             147  		CMP.B D0,D2
+00008A1E  6600 0036                        148  		BNE EXIT_FUNCB
+00008A22  1639 0000803D                    149  		MOVE.B COUNT_M,D3
+00008A28  5203                             150  		ADD.B #1,D3
+00008A2A  13C3 0000803D                    151  		MOVE.B D3,COUNT_M
+00008A30  13FC 0000 0000803C               152  		MOVE.B #0,COUNT_N
+00008A38  1639 0000803D                    153  		MOVE.B COUNT_M,D3
+00008A3E  1839 0000803F                    154  		MOVE.B T,D4
+00008A44  B803                             155  		CMP.B D3,D4
+00008A46  6600 000E                        156  		BNE EXIT_FUNCB
+00008A4A  13FC 0003 00008040               157  		MOVE.B #3,FASE
+00008A52  14BC 0000                        158  		MOVE.B #$00,(A2)
+00008A56                                   159  		
+00008A56                                   160  
+00008A56                                   161  
+00008A56                                   162  
+00008A56  4C9F 7FFF                        163  EXIT_FUNCB	MOVEM (SP)+,D0-D7/A0-A6
+00008A5A  4E75                             164  		RTS
+00008A5C                                   165  	
+00008A5C  48A7 FFFE                        166  FUNC_C	MOVEM D0-D7/A0-A6,-(SP)
+00008A60  207C 00008000                    167  		MOVEA.L #MSG,A0	
+00008A66  227C 00002004                    168  		MOVEA.L #PIADA1,A1
+00008A6C  247C 00002005                    169  		MOVEA.L #PIACA1,A2
+00008A72                                   170  
+00008A72  1039 00008040                    171  		MOVE.B FASE,D0	*if
+00008A78                                   172  
+00008A78  B03C 0001                        173  		CMP.B	#1,D0
+00008A7C  6600 0010                        174  		BNE ELC
+00008A80  13FC 0001 00008042               175  		MOVE.B #1,WAIT_C
+00008A88  4EF9 00008B12                    176  		JMP EFC
+00008A8E                                   177  
+00008A8E  B03C 0002                        178  ELC     CMP.B #2,D0
+00008A92  6600 007E                        179  		BNE EFC
+00008A96                                   180  
+00008A96  1039 00008044                    181  		MOVE.B LASTSE,D0
+00008A9C  B03C 0002                        182  		CMP.B #2,D0
+00008AA0  6600 0010                        183  		BNE K_C
+00008AA4  13FC 0001 00008042               184  		MOVE.B #1,WAIT_C
+00008AAC  4EF9 00008B12                    185  		JMP EFC
+00008AB2                                   186  				
+00008AB2                                   187  
+00008AB2  13FC 0002 00008044               188  K_C		MOVE.B #2,LASTSE
+00008ABA                                   189  
+00008ABA  1039 0000803C                    190  		MOVE.B COUNT_N,D0
+00008AC0  1239 0000803D                    191  		MOVE.B COUNT_M,D1
+00008AC6  1191 0000                        192  		MOVE.B (A1),(A0,D0)
+00008ACA  5200                             193  		ADD.B	#1,D0
+00008ACC  13C0 0000803C                    194  		MOVE.B D0,COUNT_N
+00008AD2  1439 0000803E                    195  		MOVE.B N,D2
+00008AD8  B400                             196  		CMP.B D0,D2
+00008ADA  6600 0036                        197  		BNE EFC
+00008ADE  1639 0000803D                    198  		MOVE.B COUNT_M,D3
+00008AE4  5203                             199  		ADD.B #1,D3
+00008AE6  13C3 0000803D                    200  		MOVE.B D3,COUNT_M
+00008AEC  13FC 0000 0000803C               201  		MOVE.B #0,COUNT_N
+00008AF4  1639 0000803D                    202  		MOVE.B COUNT_M,D3
+00008AFA  1839 0000803F                    203  		MOVE.B T,D4
+00008B00  B803                             204  		CMP.B D3,D4
+00008B02  6600 000E                        205  		BNE EFC
+00008B06  13FC 0003 00008040               206  		MOVE.B #3,FASE
+00008B0E  14BC 0000                        207  		MOVE.B #$00,(A2)
+00008B12                                   208  		
+00008B12                                   209  
+00008B12                                   210  
+00008B12                                   211  
+00008B12  4C9F 7FFF                        212  EFC	MOVEM (SP)+,D0-D7/A0-A6
+00008B16  4E75                             213  		RTS
+00008B18                                   214  	
+00008B18                                   215  		END MAIN
+
+No errors detected
+No warnings generated

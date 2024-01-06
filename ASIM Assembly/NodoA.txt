@@ -1,0 +1,94 @@
+lastSend = 3
+count_N = 0
+fase = 1
+
+ISR_B(){
+	if(get_mutex()){
+		func_b()
+		if(wait_c==1){
+			func_c()
+			wait_c = 0
+		}
+		release_mutex()
+	}else{
+		wait_b = 1
+	}
+	rte
+}
+
+func_b(){
+	
+	if(fase==1){
+		if(N==0){
+			N = get_byte()
+			rts
+		}
+		b = get_byte()
+		msg[count_N]=b
+		count_N++
+		if(count_N==N){
+			fase = 2
+			count_N = 0
+		}
+		rts
+	}else if(fase==2){
+	
+		if(lastSend==1){
+			wait_b = 1;
+			rts
+		}
+		lastSend = 1;
+		
+		b = get_byte()
+		msg[count_N]=b
+		count_N++
+		if(count_N==N){
+			count_N = 0
+			count_M++
+		}
+		if(count_M==T){
+			fase = 3
+			disable_interrupt()
+		}
+	}
+}
+
+ISR_C(){
+	if(get_mutex()){
+		func_c()
+		if(wait_b==1){
+			func_b()
+			wait_b = 0
+		}
+		release_mutex()
+	}else{
+		wait_c = 1
+	}
+	rte
+}
+
+func_c(){
+	if(fase==1){
+		wait_c = 1
+		rts
+	}else if(fase==2){
+	
+		if(lastSend==2){
+			wait_c = 1;
+			rts
+		}
+		lastSend = 2;
+		
+		b = get_byte()
+		msg[count_N]=b
+		count_N++
+		if(count_N==N){
+			count_N = 0
+			count_M++
+		}
+		if(count_M==T){
+			fase = 3
+			disable_interrupt()
+		}
+	}
+}

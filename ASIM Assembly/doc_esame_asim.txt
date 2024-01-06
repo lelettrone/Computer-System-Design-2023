@@ -1,0 +1,22 @@
+caricare cfg, builld, Init
+carica gli script nell'ordine
+C(M68001), B(M68004), A(M68007)
+carica memoria di A(tabella interrupt Memory8)
+
+
+il nodo B invia 2, che viene messo in N
+
+in output all'indirizzo 8000 A da
+3F 40 che sono ?@ inviati da B, ed è il primo mess ricevuto in fase 1,
+quindi solo da B come dice la traccia
+
+poi in uscita da due caratteri successivi come valore
+uno dato da B e uno da C, in particolare
+B = '?@ACEGIKMOQSUWY'
+C = 'BDFHJLNPRTVXZ'
+
+41 42 = A B
+43 44 = C D
+45 46 = E F
+...
+49 4A = I J
